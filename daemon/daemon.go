@@ -74,7 +74,7 @@ type Daemon struct {
 	l7Proxy           *proxy.Proxy
 	loadBalancer      *types.LoadBalancer
 	loopbackIPv4      net.IP
-	policy            policy.Tree
+	policy            *policy.Repository
 
 	containersMU sync.RWMutex
 	containers   map[string]*container.Container
@@ -178,8 +178,9 @@ func (d *Daemon) GetBpfDir() string {
 	return d.conf.BpfDir
 }
 
-func (d *Daemon) GetPolicyTree() *policy.Tree {
-	return &d.policy
+// GetPolicyRepository returns the policy repository of the daemon
+func (d *Daemon) GetPolicyRepository() *policy.Repository {
+	return d.policy
 }
 
 func (d *Daemon) GetConsumableCache() *policy.ConsumableCache {
@@ -560,7 +561,7 @@ func NewDaemon(c *Config) (*Daemon, error) {
 		events:            make(chan events.Event, 512),
 		loadBalancer:      lb,
 		consumableCache:   policy.NewConsumableCache(),
-		policy:            policy.Tree{},
+		policy:            policy.NewPolicyRepository(),
 		ignoredContainers: make(map[string]int),
 		buildEndpointChan: make(chan *endpoint.Request, common.EndpointsPerHost),
 		uniqueID:          map[uint64]bool{},
@@ -662,16 +663,16 @@ func (d *Daemon) checkStaleGlobalMap(path string, filename string) {
 
 	for k := range d.endpoints {
 		e := d.endpoints[k]
-		if (e.Consumable != nil &&
-		    e.Opts.IsDisabled(endpoint.OptionConntrackLocal)) {
+		if e.Consumable != nil &&
+			e.Opts.IsDisabled(endpoint.OptionConntrackLocal) {
 			globalCTinUse = true
 			break
 		}
 	}
 
-	if (!globalCTinUse &&
-	    (filename == ctmap.MapName6Global ||
-	     filename == ctmap.MapName4Global)) {
+	if !globalCTinUse &&
+		(filename == ctmap.MapName6Global ||
+			filename == ctmap.MapName4Global) {
 		d.removeStaleMap(path)
 	}
 }

@@ -16,7 +16,6 @@ package policy
 
 import (
 	"bytes"
-	"crypto/sha512"
 	"encoding/json"
 	"fmt"
 
@@ -92,89 +91,6 @@ func (l4 *L4Filter) UnmarshalJSON(data []byte) error {
 	copy(l4.L7Rules, l4filter.L7Rules)
 
 	return nil
-}
-
-func (l4 *L4Filter) Merge(result *L4Policy, m map[string]L4Filter, proto string) {
-	fmt := fmt.Sprintf("%s:%d", proto, l4.Port)
-
-	if _, ok := m[fmt]; !ok {
-		m[fmt] = *l4
-	}
-}
-
-type AllowL4 struct {
-	Ingress []L4Filter `json:"in-ports,omitempty"`
-	Egress  []L4Filter `json:"out-ports,omitempty"`
-}
-
-func (l4 *AllowL4) merge(result *L4Policy) {
-	for _, f := range l4.Ingress {
-		if f.Protocol == "" {
-			f.Merge(result, result.Ingress, "tcp")
-			f.Merge(result, result.Ingress, "udp")
-		} else {
-			f.Merge(result, result.Ingress, f.Protocol)
-		}
-	}
-
-	for _, f := range l4.Egress {
-		if f.Protocol == "" {
-			f.Merge(result, result.Egress, "tcp")
-			f.Merge(result, result.Egress, "udp")
-		} else {
-			f.Merge(result, result.Egress, f.Protocol)
-		}
-	}
-}
-
-type RuleL4 struct {
-	RuleBase
-	Allow []AllowL4 `json:"l4"`
-}
-
-func (l4 *RuleL4) IsMergeable() bool {
-	return true
-}
-
-// GetL4Policy checks whether the L4 rule covers the destination context
-// and if so, merges both ingress and egress rules into the result.
-func (l4 *RuleL4) GetL4Policy(ctx *SearchContext, result *L4Policy) *L4Policy {
-	if result == nil {
-		return nil
-	}
-
-	if len(l4.Coverage) == 0 || ctx.TargetCoveredBy(l4.Coverage) {
-		for _, a := range l4.Allow {
-			a.merge(result)
-		}
-	} else {
-		policyTrace(ctx, "L4 Rule %v has no coverage\n", l4)
-		return nil
-	}
-
-	return result
-}
-
-func (l4 *RuleL4) Resolve(node *Node) error {
-	log.Debugf("Resolving L4 rule %+v\n", l4)
-
-	return l4.RuleBase.Resolve(node)
-}
-
-func (l4 *RuleL4) SHA256Sum() (string, error) {
-	sha := sha512.New512_256()
-	if err := json.NewEncoder(sha).Encode(l4); err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%x", sha.Sum(nil)), nil
-}
-
-func (l4 *RuleL4) CoverageSHA256Sum() (string, error) {
-	sha := sha512.New512_256()
-	if err := json.NewEncoder(sha).Encode(l4.Coverage); err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%x", sha.Sum(nil)), nil
 }
 
 type L4PolicyMap map[string]L4Filter

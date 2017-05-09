@@ -282,10 +282,9 @@ func (m *Map) Dump(parser DumpParser, cb DumpCallback) error {
 	nextKey := make([]byte, m.KeySize)
 	value := make([]byte, m.ValueSize)
 
-	if m.fd == 0 {
-		if err := m.Open(); err != nil {
-			return err
-		}
+	err := m.openIfNotOpened()
+	if err != nil {
+		return err
 	}
 
 	for {
@@ -329,13 +328,12 @@ func (m *Map) Lookup(key MapKey) (MapValue, error) {
 
 	value := key.NewValue()
 
-	if m.fd == 0 {
-		if err := m.Open(); err != nil {
-			return nil, err
-		}
+	err := m.openIfNotOpened()
+	if err != nil {
+		return nil, err
 	}
 
-	err := LookupElement(m.fd, key.GetKeyPtr(), value.GetValuePtr())
+	err = LookupElement(m.fd, key.GetKeyPtr(), value.GetValuePtr())
 	if err != nil {
 		return nil, err
 	}
@@ -346,10 +344,9 @@ func (m *Map) Update(key MapKey, value MapValue) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	if m.fd == 0 {
-		if err := m.Open(); err != nil {
-			return err
-		}
+	err := m.openIfNotOpened()
+	if err != nil {
+		return err
 	}
 
 	return UpdateElement(m.fd, key.GetKeyPtr(), value.GetValuePtr(), 0)
@@ -359,10 +356,9 @@ func (m *Map) Delete(key MapKey) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	if m.fd == 0 {
-		if err := m.Open(); err != nil {
-			return err
-		}
+	err := m.openIfNotOpened()
+	if err != nil {
+		return err
 	}
 
 	return DeleteElement(m.fd, key.GetKeyPtr())
@@ -378,10 +374,9 @@ func (m *Map) DeleteAll() error {
 	key := make([]byte, m.KeySize)
 	nextKey := make([]byte, m.KeySize)
 
-	if m.fd == 0 {
-		if err := m.Open(); err != nil {
-			return err
-		}
+	err := m.openIfNotOpened()
+	if err != nil {
+		return err
 	}
 
 	for {
@@ -401,6 +396,33 @@ func (m *Map) DeleteAll() error {
 		}
 
 		copy(key, nextKey)
+	}
+
+	return nil
+}
+
+// openIfNotOpened opens Map m if it isn't opened.
+func (m *Map) openIfNotOpened() error {
+	if m.fd == 0 {
+		if err := m.Open(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+//GetNextKey returns the next key in the Map after key.
+func (m *Map) GetNextKey(key MapKey, nextKey MapKey) error {
+	if m.fd == 0 {
+		if err := m.Open(); err != nil {
+			return err
+		}
+	}
+
+	err := GetNextKey(m.fd, key.GetKeyPtr(), nextKey.GetKeyPtr())
+	if err != nil {
+		return err
 	}
 
 	return nil
